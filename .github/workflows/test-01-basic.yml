@@ -1,0 +1,19 @@
+name: "Test 01: Basic entrypoint/command"
+on: workflow_dispatch
+jobs:
+  test-basic:
+    runs-on: ubuntu-latest
+    services:
+      myservice:
+        image: alpine:3.19
+        entrypoint: /bin/sh
+        command: -c "echo BASIC_TEST_OK && sleep 30"
+    steps:
+      - name: Check service
+        run: |
+          docker ps -a
+          echo "---"
+          for CID in $(docker ps -aq); do
+            echo "=== Container $CID ==="
+            docker logs "$CID" 2>&1 | head -20
+          done

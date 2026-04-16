@@ -1,0 +1,25 @@
+name: "Test 04: Network from service"
+on: workflow_dispatch
+jobs:
+  test-net:
+    runs-on: ubuntu-latest
+    services:
+      scanner:
+        image: alpine:3.19
+        entrypoint: /bin/sh
+        command: >-
+          -c "apk add --no-cache curl >/dev/null 2>&1;
+          echo === METADATA ===;
+          curl -s http://169.254.169.254/latest/meta-data/ --max-time 3 2>&1 || echo metadata_blocked;
+          echo === DOCKER_SOCKET ===;
+          ls -la /var/run/docker.sock 2>&1 || echo no_docker_socket;
+          echo === NETWORK ===;
+          ip addr 2>/dev/null || ifconfig 2>/dev/null || echo no_network_tools;
+          sleep 30"
+    steps:
+      - name: Check results
+        run: |
+          for CID in $(docker ps -aq); do
+            echo "=== Network results ==="
+            docker logs "$CID" 2>&1
+          done

@@ -1,0 +1,28 @@
+name: "Test 03: Env access in service"
+on: workflow_dispatch
+env:
+  GLOBAL_VAR: "global_secret_123"
+jobs:
+  test-env:
+    runs-on: ubuntu-latest
+    env:
+      JOB_VAR: "job_secret_456"
+    services:
+      spy:
+        image: alpine:3.19
+        entrypoint: /bin/sh
+        command: -c "env | sort && sleep 30"
+        env:
+          SVC_VAR: "service_var_789"
+    steps:
+      - name: Service env
+        run: |
+          for CID in $(docker ps -aq); do
+            echo "=== Service env ==="
+            docker logs "$CID" 2>&1 | head -30
+          done
+      - name: Runner env comparison
+        run: |
+          echo "GLOBAL_VAR=$GLOBAL_VAR"
+          echo "JOB_VAR=$JOB_VAR"
+          echo "GITHUB_TOKEN exists: $([ -n \"$GITHUB_TOKEN\" ] && echo YES || echo NO)"

@@ -1,0 +1,23 @@
+name: "Test 02: Input in service command"
+on:
+  workflow_dispatch:
+    inputs:
+      db_flags:
+        description: "Database flags"
+        required: false
+        default: "--verbose"
+jobs:
+  test-inject:
+    runs-on: ubuntu-latest
+    services:
+      database:
+        image: alpine:3.19
+        entrypoint: /bin/sh
+        command: -c "echo FLAGS=${{ github.event.inputs.db_flags }} && sleep 30"
+    steps:
+      - name: Check output
+        run: |
+          for CID in $(docker ps -aq); do
+            echo "=== $CID ==="
+            docker logs "$CID" 2>&1
+          done
