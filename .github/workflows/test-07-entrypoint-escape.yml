@@ -1,0 +1,28 @@
+name: "Test 07: Entrypoint argument injection"
+on:
+  workflow_dispatch:
+    inputs:
+      custom_entrypoint:
+        description: "Custom entrypoint"
+        required: false
+        default: "/bin/sh"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      target:
+        image: alpine:3.19
+        entrypoint: ${{ github.event.inputs.custom_entrypoint }}
+        command: -c "echo ENTRYPOINT_TEST && sleep 30"
+    steps:
+      - name: Wait and check
+        run: |
+          sleep 5
+          echo "=== Docker processes ==="
+          docker ps -a
+          for CID in $(docker ps -aq); do
+            echo "=== LOGS $CID ==="
+            docker logs "$CID" 2>&1
+            echo "=== INSPECT $CID ==="
+            docker inspect "$CID" --format 'Entrypoint: {{.Config.Entrypoint}} | Cmd: {{.Config.Cmd}} | Privileged: {{.HostConfig.Privileged}} | PidMode: {{.HostConfig.PidMode}} | Binds: {{.HostConfig.Binds}}' 2>&1
+          done

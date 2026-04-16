@@ -1,0 +1,40 @@
+name: "Test 08: Container escape attempts"
+on: workflow_dispatch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      attacker:
+        image: alpine:3.19
+        entrypoint: /bin/sh
+        command: >-
+          -c "
+          echo === DOCKER SOCKET ===;
+          ls -la /var/run/docker.sock 2>&1;
+          echo === MOUNT INFO ===;
+          cat /proc/self/mountinfo 2>&1 | head -20;
+          echo === CAPABILITIES ===;
+          cat /proc/self/status 2>&1 | grep -i cap;
+          echo === HOST NETWORK SCAN ===;
+          for port in 2375 2376 8080 80 443; do
+            (echo > /dev/tcp/172.17.0.1/$port) 2>/dev/null && echo PORT_$port=OPEN || echo PORT_$port=CLOSED;
+          done;
+          echo === METADATA SERVICE ===;
+          wget -q -O - http://169.254.169.254/latest/meta-data/ --timeout=3 2>&1 || echo metadata_blocked;
+          echo === RUNNER ACTIONS URL ===;
+          wget -q -O - http://172.17.0.1:8080/ --timeout=3 2>&1 || echo runner_blocked;
+          echo === DOCKER HOST ENV ===;
+          env | grep -i docker 2>&1;
+          echo === PROC ===;
+          ls /proc/*/cmdline 2>/dev/null | head -10;
+          sleep 60
+          "
+    steps:
+      - name: Wait for scans
+        run: sleep 15
+      - name: Results
+        run: |
+          for CID in $(docker ps -aq); do
+            echo "=== ESCAPE ATTEMPT RESULTS ==="
+            docker logs "$CID" 2>&1
+          done

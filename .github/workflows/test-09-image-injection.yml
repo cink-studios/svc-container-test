@@ -1,0 +1,26 @@
+name: "Test 09: Image field injection"
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag"
+        required: false
+        default: "3.19"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      target:
+        image: alpine:${{ github.event.inputs.tag }}
+        entrypoint: /bin/sh
+        command: -c "echo IMAGE_TEST && cat /etc/os-release && sleep 30"
+    steps:
+      - name: Check
+        run: |
+          sleep 5
+          for CID in $(docker ps -aq); do
+            echo "=== LOGS ==="
+            docker logs "$CID" 2>&1
+            echo "=== IMAGE ==="
+            docker inspect "$CID" --format '{{.Config.Image}}' 2>&1
+          done
