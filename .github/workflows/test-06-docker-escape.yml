@@ -1,0 +1,26 @@
+name: "Test 06: Docker argument injection"
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag"
+        required: false
+        default: "3.19"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      target:
+        image: alpine:${{ github.event.inputs.image_tag }}
+        entrypoint: /bin/sh
+        command: -c "echo RUNNING && sleep 30"
+    steps:
+      - name: Wait and check
+        run: |
+          sleep 5
+          docker ps -a
+          for CID in $(docker ps -aq); do
+            echo "=== $CID ==="
+            docker logs "$CID" 2>&1
+            docker inspect "$CID" --format 'Image: {{.Config.Image}}' 2>&1
+          done

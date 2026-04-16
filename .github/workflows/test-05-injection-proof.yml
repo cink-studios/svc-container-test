@@ -1,0 +1,34 @@
+name: "Test 05: Injection proof"
+on:
+  workflow_dispatch:
+    inputs:
+      user_input:
+        description: "User controlled input"
+        required: false
+        default: "safe_value"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      target:
+        image: alpine:3.19
+        entrypoint: /bin/sh
+        command: -c "echo INPUT=${{ github.event.inputs.user_input }} > /tmp/output.txt && cat /tmp/output.txt && id >> /tmp/output.txt && cat /tmp/output.txt && sleep 60"
+        ports:
+          - 8080:8080
+    steps:
+      - name: Wait for container
+        run: sleep 10
+
+      - name: Get container logs
+        run: |
+          echo "=== ALL CONTAINERS ==="
+          docker ps -a
+          echo ""
+          for CID in $(docker ps -aq); do
+            echo "=== LOGS $CID ==="
+            docker logs "$CID" 2>&1
+            echo "=== INSPECT $CID ==="
+            docker inspect "$CID" --format '{{.Config.Entrypoint}} {{.Config.Cmd}}' 2>&1
+            echo ""
+          done
